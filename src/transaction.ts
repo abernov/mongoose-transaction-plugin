@@ -12,10 +12,11 @@ const TRANSACTION_KEEP_COMMITTED = (process.env.TRANSACTION_KEEP_COMMITTED === '
 export interface IHistory {
   // collection name
   col: string;
-  // document's object id
+  // document's unique id
+  // TODO : support any types
   oid: mongoose.Types.ObjectId;
   // insert, update, remove
-  op: string;
+  op: 'insert' | 'remove' | 'update';
   // update query string.
   query: string;
 }
@@ -27,7 +28,7 @@ export interface ITransaction extends mongoose.Document {
 }
 
 interface IParticipant {
-  op: string;
+  op: 'insert' | 'remove' | 'update';
   doc: mongoose.Document;
   model?: any;
   cond?: Object;
@@ -111,10 +112,9 @@ export class Transaction extends events.EventEmitter {
 
     try {
       await Bluebird.each(this.participants, async (participant) => {
-        if (participant.op === 'insert') {
-          participant.doc['__t'] = undefined;
+        if (participant.op === 'insert') 
           return await participant.doc.remove();
-        }
+
         return await participant.doc.update({$unset: {__t: ''}}, { w: 1 }, undefined).exec();
       });
       await this.transaction.remove();
@@ -125,34 +125,65 @@ export class Transaction extends events.EventEmitter {
     this.participants = [];
   }
 
-  private static async commitHistory(history: IHistory): Promise<void> {
-    return new Promise<void>((resolve, reject) => {
-      return this.connection.db.collection(history.col, function(err, collection) {
-        if (err) {
-          debug('Can not find collection: ', err);
-          return resolve();
-        }
-        const query = JSON.parse(history.query);
-        query['$unset'] = query['$unset'] || {};
-        query['$unset']['__t'] = '';
-        debug('update recommit query is : ', query);
-        return collection.findOneAndUpdate({_id: history.oid}, query, function(err, doc) {
-          debug('updated document ', doc);
-          return resolve();
-        });
-      });
+  private static async commitHistory(history: IHistory, tid: mongoose.Types.ObjectId): Promise<void> {
+    return Promise.resolve(this.connection.db.collection(history.col))
+    .then(collection => {
+      if (history.op === 'remove')
+        return Transaction.commitHistoryRemove(history, collection);
+      return Transaction.commitHistoryUpdate(history, tid, collection);
+    })
+    .catch(err => {
+      debug(`transaction ${history.op} failed ${err.message}`);
+      throw new Error(err);
     });
+  }
+
+  private static commitHistoryRemove(history: IHistory, collection: any): Promise<void> {
+    return collection.deleteOne({_id:history.oid});
+  }
+
+  private static commitHistoryUpdate(history: IHistory, tid: mongoose.Types.ObjectId, collection: any): Promise<void> {
+    const query = JSON.parse(history.query);
+
+    if (history.op === 'insert') {
+      delete query['_id'];
+      delete query['__t'];
+    } else {
+      query['$unset'] = query['$unset'] || {};
+      query['$set'] = query['$set'] || {};
+
+      delete query['$set']['_id'];
+      delete query['$set']['__t'];
+      query['$unset']['__t'] = '';
+    }
+
+    if (query['$set'] != null && Object.keys(query['$set']).length === 0)
+      delete query['$set'];
+    
+    return collection.updateOne({_id: history.oid, __t : tid}, query, { w : 1 });
   }
 
   public static async recommit(transaction: ITransaction): Promise<void> {
     const histories = transaction.history;
     if (!histories) return;
+    try {
+      await Bluebird.each(histories, async (history) => {
+        debug('find history collection: ', history.col, ' oid: ', history.oid);
+        await Transaction.commitHistory(history, transaction._id);
+      });
+      debug('transaction recommited!');
 
-    await Bluebird.each(histories, async (history) => {
-      debug('find history collection: ', history.col, ' oid: ', history.oid);
-      await Transaction.commitHistory(history);
-    });
-    debug('transaction recommited!');
+      if (!TRANSACTION_KEEP_COMMITTED) {
+        await transaction.remove();
+      } else {
+        transaction.state = 'committed';
+        await transaction.save();
+      }
+    } catch (err) {
+      // 하나라도 실패하면 pending 상태로 recommit 처리된다.
+      debug('Fails to save whole transactions but they will be saved', err);
+    }
+    
   }
 
   private static async validate(doc: any): Promise<void> {
@@ -167,15 +198,15 @@ export class Transaction extends events.EventEmitter {
       await Transaction.validate(participant.doc);
 
       debug('delta: %o', (<any>participant.doc).$__delta());
-      // TODO: 쿼리 제대로 만들기
       let query: string;
       if (participant.op === 'update') {
         query = JSON.stringify(((<any>participant.doc).$__delta() || [null, {}])[1]);
       } else if (participant.op === 'remove') {
         query = JSON.stringify({ _id: '' });
       } else if (participant.op === 'insert') {
-        query = JSON.stringify({});
+        query = JSON.stringify(participant.doc);
       }
+      debug(`op : ${participant.op} query : ${JSON.stringify(query)}`);
       transaction.history.push({
         col: (<any>participant.doc).collection.name,
         oid: participant.doc._id,
@@ -202,8 +233,11 @@ export class Transaction extends events.EventEmitter {
     debug('apply participants\' changes');
     try {
       await Bluebird.map(this.participants, async (participant) => {
+        debug('commit: [%s] %o', participant.op, participant.doc)
+        debug('delta: %o', (participant.doc as any).$__delta());
         if (participant.op === 'remove') return await participant.doc.remove();
-        else return await participant.doc.save();
+        if (participant.op === 'insert') participant.doc.isNew = false;
+        return await participant.doc.save();
       });
 
       debug('transaction committed');
@@ -227,9 +261,9 @@ export class Transaction extends events.EventEmitter {
   public async insertDoc(doc: mongoose.Document) {
     if (!this.transaction) throw new Error('Could not find any transaction');
 
-    await doc.save();
-
     doc['__t'] = this.transaction._id;
+    await doc.collection.insert(doc);
+     
     this.participants.push({ op: 'insert', doc: doc });
   }
 
@@ -238,7 +272,7 @@ export class Transaction extends events.EventEmitter {
     if (!this.transaction) throw new Error('Could not find any transaction');
 
     const id: mongoose.Types.ObjectId = doc['__t'];
-    if (!id || id.toHexString() !== this.transaction.id) throw new Error('락이 이상함');
+    if (!id || id.toHexString() !== this.transaction.id) throw new Error('Already other locked');
     this.participants.push({ op: 'remove', doc: doc });
   }
 
