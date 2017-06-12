@@ -31,7 +31,7 @@
     "@types/bluebird": "^3.0.37",
     "@types/debug": "0.0.29",
     "@types/lodash": "4.14.56",
-    "@types/mongoose": "^4.7.3",
+    "@types/mongoose": "ts2.2",
     "@types/mongodb": "ts2.2",
     "@types/node": "^7.0.0",
     "bluebird": "^3.4.1",
