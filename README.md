@@ -6,6 +6,15 @@ A mongoose plugin for transaction-like semantics between multiple documents.
 [![Dependency Status](https://david-dm.org/spearhead-ea/mongoose-transaction-plugin/status.svg)](https://david-dm.org/spearhead-ea/mongoose-transaction-plugin)
 [![Coverage Status](https://coveralls.io/repos/github/spearhead-ea/mongoose-transaction-plugin/badge.svg?branch=master)](https://coveralls.io/github/spearhead-ea/mongoose-transaction-plugin?branch=master)
 
+## Tests
+
+  To run the test suite, first install the dependencies, then run `npm test`:
+
+```bash
+$ npm install
+$ npm test
+```
+
 ## Example
 
 ```typescript
