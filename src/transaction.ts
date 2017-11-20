@@ -112,7 +112,7 @@ export class Transaction extends events.EventEmitter {
 
     try {
       await Bluebird.each(this.participants, async (participant) => {
-        if (participant.op === 'insert') 
+        if (participant.op === 'insert')
           return await participant.doc.remove();
 
         return await participant.doc.update({$unset: {__t: ''}}).exec();
@@ -230,7 +230,7 @@ export class Transaction extends events.EventEmitter {
     debug('apply participants\' changes');
     try {
       await Bluebird.map(this.participants, async (participant) => {
-        debug('commit: [%s] %o', participant.op, participant.doc)
+        debug('commit: [%s] %o', participant.op, participant.doc);
         debug('delta: %o', (participant.doc as any).$__delta());
         if (participant.op === 'remove') return await participant.doc.remove();
         if (participant.op === 'insert') participant.doc.isNew = false;
@@ -260,6 +260,7 @@ export class Transaction extends events.EventEmitter {
     if (!this.transaction) throw new Error('Could not find any transaction');
 
     doc['__t'] = this.transaction._id;
+    // 아직 트랜잭션 저장하는 단계는 아니지만 _id 중복 체크를 위해 저장
     await doc.collection.insert(doc);
 
     this.participants.push({ op: 'insert', doc: doc });
