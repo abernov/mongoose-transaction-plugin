@@ -281,11 +281,13 @@ describe('Transaction', () => {
       op: 'update',
       query: JSON.stringify({ $set: { money: 1000 } })
     });
+
     await oldTransaction.save();
     await TestPlayer.collection.update({ name: 'ekim' }, { $set: { __t: oldTransaction._id } });
 
     await Transaction.scope(async (t) => {
       const doc = await t.findOne(TestPlayer, { name: 'ekim' });
+
       expect(doc.money).toEqual(1000);
 
       const transaction = await Transaction.getModel.findOne({ _id: oldTransaction._id });
@@ -362,7 +364,6 @@ describe('Transaction (_id uniqueness)', () => {
   }));
 
   it('COULD update a doc after t.insertDoc', spec(async () => {
-    console.log('COULD update a doc after t.insertDoc');
     await Transaction.scope(async t => {
       const a = new TestUniqId();
       await t.insertDoc(a);
@@ -449,5 +450,21 @@ describe('Transcation (recommit)', () => {
     await Transaction.recommit(t);
     expect(await TestRecommit.count({})).toEqual(0);
   }))
+
+  it('SHOULD be no __t when the new doc is committed', spec(async () => {
+    const transaction = new Transaction();
+    const t = new Transaction.getModel();
+    (transaction as any).transaction = await t.save();
+    const tui = new TestRecommit();
+    await transaction.insertDoc(tui);
+    tui.name = 'baby';
+    tui.opts = {'name' : 'value', 'check' : true, 'numeral' : 3};
+
+    await (Transaction as any).makeHistory((transaction as any).participants, t);
+    await Transaction.recommit(t);
+
+    const doc = await TestRecommit.findOne();
+    expect(doc['__t']).toBeUndefined();
+  }));
 });
 
