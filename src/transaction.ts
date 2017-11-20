@@ -115,7 +115,7 @@ export class Transaction extends events.EventEmitter {
         if (participant.op === 'insert')
           return await participant.doc.remove();
 
-        return await participant.doc.update({$unset: {__t: ''}}, { w: 1 }, undefined).exec();
+        return await participant.doc.update({$unset: {__t: ''}}).exec();
       });
       await this.transaction.remove();
     } catch (e) {
@@ -127,10 +127,10 @@ export class Transaction extends events.EventEmitter {
 
   private static async commitHistory(history: IHistory, tid: mongoose.Types.ObjectId): Promise<void> {
     return Promise.resolve(this.connection.db.collection(history.col))
-    .then(collection => {
+    .then(async collection => {
       if (history.op === 'remove')
-        return Transaction.commitHistoryRemove(history, collection);
-      return Transaction.commitHistoryUpdate(history, tid, collection);
+        return await Transaction.commitHistoryRemove(history, collection);
+      return await Transaction.commitHistoryUpdate(history, tid, collection);
     })
     .catch(err => {
       debug(`transaction ${history.op} failed ${err.message}`);
@@ -138,29 +138,27 @@ export class Transaction extends events.EventEmitter {
     });
   }
 
-  private static commitHistoryRemove(history: IHistory, collection: any): Promise<void> {
-    return collection.deleteOne({_id:history.oid});
+  private static async commitHistoryRemove(history: IHistory, collection: any): Promise<void> {
+    return await collection.deleteOne({_id:history.oid});
   }
 
-  private static commitHistoryUpdate(history: IHistory, tid: mongoose.Types.ObjectId, collection: any): Promise<void> {
-    const query = JSON.parse(history.query);
+  private static async commitHistoryUpdate(history: IHistory, tid: mongoose.Types.ObjectId, collection: any): Promise<void> {
+    let query = JSON.parse(history.query);
 
     if (history.op === 'insert') {
-      delete query['_id'];
-      delete query['__t'];
+      query = _.omit(query, ['_id', '__t']);
     } else {
       query['$unset'] = query['$unset'] || {};
       query['$set'] = query['$set'] || {};
 
-      delete query['$set']['_id'];
-      delete query['$set']['__t'];
+      query['$set'] = _.omit(query['$set'], ['_id', '__t']);
       query['$unset']['__t'] = '';
     }
 
-    if (query['$set'] != null && Object.keys(query['$set']).length === 0)
-      delete query['$set'];
-
-    return collection.updateOne({_id: history.oid, __t : tid}, query, { w : 1 });
+    if (query['$set'] != null && Object.keys(query['$set']).length === 0) {
+      query = _.omit(query, ['$set']);
+    }
+    return await collection.update({_id: history.oid, __t : tid}, query, { w : 1 });
   }
 
   public static async recommit(transaction: ITransaction): Promise<void> {
@@ -183,7 +181,6 @@ export class Transaction extends events.EventEmitter {
       // 하나라도 실패하면 pending 상태로 recommit 처리된다.
       debug('Fails to save whole transactions but they will be saved', err);
     }
-
   }
 
   private static async validate(doc: any): Promise<void> {
@@ -259,6 +256,7 @@ export class Transaction extends events.EventEmitter {
 
   // 생성될 document를 transaction에 참가시킴
   public async insertDoc(doc: mongoose.Document) {
+
     if (!this.transaction) throw new Error('Could not find any transaction');
 
     doc['__t'] = this.transaction._id;
