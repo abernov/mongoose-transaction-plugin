@@ -180,6 +180,7 @@ export class Transaction extends events.EventEmitter {
     } catch (err) {
       // 하나라도 실패하면 pending 상태로 recommit 처리된다.
       debug('Fails to save whole transactions but they will be saved', err);
+      throw err;
     }
   }
 
