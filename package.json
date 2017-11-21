@@ -1,6 +1,6 @@
 {
     "name": "mongoose-transaction-plugin",
-    "version": "1.3.99-edge-lts.3",
+    "version": "1.3.99-edge-lts.4",
     "description": "A mongoose plugin for transaction-like semantics between multiple documents.",
     "main": "dist/index.js",
     "typings": "dist/index.d.ts",
