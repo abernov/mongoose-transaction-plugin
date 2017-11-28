@@ -29,12 +29,6 @@ const debug = _debug('transaction:test');
 const conn: mongoose.Connection = mongoose.connection;
 
 describe('Transaction-static', () => {
-  it('should throw by use of begin() before initialize', spec(async () => {
-    let tx;
-    tx = new Transaction();
-    // await tx.begin();
-    // this will process down
-  }));
   it('should not allow an unique index', spec(async () => {
     expect(() => {
       new mongoose.Schema({ name: String }).index('name', {unique: true}).plugin(plugin);
