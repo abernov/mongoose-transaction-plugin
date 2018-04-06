@@ -30,10 +30,10 @@
     "dependencies": {
         "@types/bluebird": "3.5.5",
         "@types/debug": "0.0.29",
-        "@types/lodash": "4.14.56",
+        "@types/lodash": "4.14.106",
         "@types/mongoose": "4.7.15",
         "@types/mongodb": "2.2.3",
-        "@types/node": "^7.0.0",
+        "@types/node": "8.0.3",
         "bluebird": "^3.4.1",
         "debug": "^2.2.0",
         "lodash": "^4.14.1",
@@ -48,6 +48,7 @@
         "mockgoose": "^6.0.8",
         "random-words": "0.0.1",
         "remap-istanbul": "^0.6.4",
-        "source-map-support": "^0.4.2"
+        "source-map-support": "^0.4.2",
+        "typescript": "^2.8.1"
     }
 }
