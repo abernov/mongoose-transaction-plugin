@@ -2,6 +2,8 @@ import 'source-map-support/register';
 import * as mongoose from 'mongoose';
 import * as Bluebird from 'bluebird';
 import * as _debug from 'debug';
+import * as _ from 'lodash';
+
 import { plugin } from '../plugin';
 import { Transaction } from '../transaction';
 import { ObjectId } from '../utils';
@@ -215,6 +217,23 @@ describe('Transaction', () => {
       });
   });
 
+  it('should evaluate the condition on each retry', spec(async () => {
+    async function grow() {
+      let growth = false;
+      await Transaction.scope(async t => {
+        const wokim = await t.findOne(TestPlayer, { age: 50 });
+        if (wokim) {
+          growth = true;
+          wokim.age++;
+        }
+      });
+      return growth;
+    }
+    const result = _.countBy(await Bluebird.all([grow(), grow()]));
+    expect(result['true']).toEqual(1);
+    expect(result['false']).toEqual(1);
+  }));
+
   it('delete all document', spec(async () => {
     async function removePlayerDoc(name: string) {
       await Transaction.scope(async (t) => {
@@ -265,7 +284,7 @@ describe('Transaction', () => {
 
   it('should recommit when it finds an old pending transaction', spec(async () => {
     const oldTransaction = new Transaction.getModel();
-    oldTransaction._id = ObjectId.get(+new Date(new Date().getTime()-(1000 * 60 * 60)));
+    oldTransaction._id = ObjectId.get(+new Date(new Date().getTime() - (1000 * 60 * 60)));
     oldTransaction.state = 'pending';
 
     const ekim = await TestPlayer.findOne({ name: 'ekim' });
@@ -374,7 +393,7 @@ describe('Transcation (recommit)', () => {
     opts: any;
   };
 
-  let TestRecommit : mongoose.Model<ITestRecommit>;
+  let TestRecommit: mongoose.Model<ITestRecommit>;
 
   beforeAll(spec(async() => {
     await mockgoose(mongoose);
@@ -386,7 +405,7 @@ describe('Transcation (recommit)', () => {
 
     Transaction.initialize(conn);
   }));
-  
+
   afterEach(spec(async () => {
     await new Promise((resolve) => mockgoose.reset(() => resolve()));
   }));
@@ -419,7 +438,7 @@ describe('Transcation (recommit)', () => {
     const transaction = new Transaction();
     const t = new Transaction.getModel();
     (transaction as any).transaction = await t.save();
-    const tui = new TestRecommit({name:'dad', opts:{name:'recommit'}});
+    const tui = new TestRecommit({name: 'dad', opts: {name: 'recommit'}});
     await transaction.insertDoc(tui);
 
     await (Transaction as any).makeHistory((transaction as any).participants, t);
@@ -428,12 +447,12 @@ describe('Transcation (recommit)', () => {
     const a = await TestRecommit.findOne();
     expect(a.name).toEqual('dad');
     expect(a.opts.name).toEqual('recommit');
-  }))
+  }));
 
   it('SHOULD be able to remove doc', spec(async() => {
     const before = new TestRecommit();
     await before.save();
-    
+
     const transaction = new Transaction();
     const t = new Transaction.getModel();
     (transaction as any).transaction = await t.save();

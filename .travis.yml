@@ -19,7 +19,7 @@ before_script:
   - ./mongodb-linux-x86_64-2.6.11/bin/mongod --fork --nopreallocj --dbpath ./data/db --syslog --port 27017
   
 script:
-  - gulp coverage
+  - npm run coverage
 
 after_script:
   - npm i coveralls && cat ./coverage/lcov-remap.info | coveralls

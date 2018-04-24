@@ -7,7 +7,8 @@
     "scripts": {
         "prepublish": "gulp build",
         "build": "gulp build",
-        "test": "gulp build && jasmine"
+        "test": "gulp build && jasmine",
+        "coverage": "gulp coverage"
     },
     "repository": {
         "type": "git",

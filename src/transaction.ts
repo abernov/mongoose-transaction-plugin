@@ -84,7 +84,7 @@ export class Transaction extends events.EventEmitter {
       if (e.message === 'Transaction has already been started') return;
 
       throw e;
-    }).disposer((tx, promise) => {
+    }).disposer((tx: this, promise) => {
       if (promise.isFulfilled()) {
         return tx.commit()
           .catch(e => {
