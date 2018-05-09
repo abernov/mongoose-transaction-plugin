@@ -279,10 +279,10 @@ export class Transaction extends events.EventEmitter {
   public async findOne<T extends mongoose.Document>(model: mongoose.Model<T>, cond: Object, fields?: Object, options?: Object): Promise<T> {
     if (!this.transaction) throw new Error('Could not find any transaction');
 
-    const p = _.find(this.participants, p => {
+    const withCond = _.find(this.participants, p => {
       return p.model === model && JSON.stringify(cond) === JSON.stringify(p.cond);
     });
-    if (p && p.doc) return p.doc as T;
+    if (withCond && withCond.doc) return withCond.doc as T;
 
     if (!options) options = { retrycount: RETRYCOUNT };
     if (options['retrycount'] === undefined) {
@@ -311,10 +311,10 @@ export class Transaction extends events.EventEmitter {
     }
     if (!doc) return;
 
-    const withSameId = _.find(this.participants, p => {
-      return p.model === model && p.doc._id.equals(doc._id);
+    const withSameId: IParticipant = _.find(this.participants, p => {
+      return p.model === model && (p.doc._id.equals(doc._id) as boolean);
     });
-    if (withSameId) return withSameId.doc as T;
+    if (withSameId && withSameId.doc) return withSameId.doc as T;
 
     this.participants.push({op: 'update', doc: doc, model: model, cond: cond});
     return doc;
