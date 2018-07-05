@@ -7,7 +7,9 @@
     "scripts": {
         "prepublish": "gulp build",
         "build": "gulp build",
-        "test": "gulp build && jasmine",
+        "watch": "gulp build && gulp watch",
+        "clean": "gulp clean",
+        "test": "DEBUG=* ISLAND_LOGGER_LEVEL=crit gulp",
         "coverage": "gulp coverage"
     },
     "repository": {
@@ -32,6 +34,7 @@
         "bluebird": "^3.4.1",
         "debug": "^2.2.0",
         "lodash": "^4.16.1",
+        "source-map-support": "^0.4.2",
         "mongoose": "^4.5.8"
     },
     "devDependencies": {
@@ -42,14 +45,9 @@
         "@types/mongodb": "^2.2.3",
         "@types/node": "^8.0.3",
         "@types/jasmine": "^2.5.41",
-        "gulp": "^3.9.1",
-        "gulp-istanbul": "^1.1.1",
-        "gulp-jasmine": "^2.4.1",
-        "gulp-sourcemaps": "^1.6.0",
+        "gulp": "^4.0.0",
+        "island-build": "next",
         "mockgoose": "^6.0.8",
-        "random-words": "0.0.1",
-        "remap-istanbul": "^0.6.4",
-        "source-map-support": "^0.4.2",
-        "typescript": "^2.8.1"
+        "random-words": "0.0.1"
     }
 }
