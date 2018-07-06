@@ -1,53 +1,54 @@
 {
-    "name": "mongoose-transaction-plugin",
-    "version": "1.5.0-dev",
-    "description": "A mongoose plugin for transaction-like semantics between multiple documents.",
-    "main": "dist/index.js",
-    "typings": "dist/index.d.ts",
-    "scripts": {
-        "prepublish": "gulp build",
-        "build": "gulp build",
-        "watch": "gulp build && gulp watch",
-        "clean": "gulp clean",
-        "test": "DEBUG=* ISLAND_LOGGER_LEVEL=crit gulp",
-        "coverage": "gulp coverage"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/wokim/mongoose-transaction-plugin.git"
-    },
-    "keywords": [
-        "mongoose",
-        "transaction",
-        "mongodb"
-    ],
-    "author": "wokim <wonshikkim.kr@gmail.com>",
-    "contributors": [
-        "heycalmdown <hey.calmdown@gmail.com>"
-    ],
-    "license": "MIT",
-    "bugs": {
-        "url": "https://github.com/wokim/mongoose-transaction-plugin/issues"
-    },
-    "homepage": "https://github.com/wokim/mongoose-transaction-plugin#readme",
-    "dependencies": {
-        "bluebird": "^3.4.1",
-        "debug": "^2.2.0",
-        "lodash": "^4.16.1",
-        "source-map-support": "^0.4.2",
-        "mongoose": "^4.5.8"
-    },
-    "devDependencies": {
-        "@types/bluebird": "^3.5.5",
-        "@types/debug": "^0.0.29",
-        "@types/lodash": "^4.14.106",
-        "@types/mongoose": "^4.7.15",
-        "@types/mongodb": "^2.2.3",
-        "@types/node": "^8.0.3",
-        "@types/jasmine": "^2.5.41",
-        "gulp": "^4.0.0",
-        "island-build": "next",
-        "mockgoose": "^6.0.8",
-        "random-words": "0.0.1"
-    }
+  "name": "mongoose-transaction-plugin",
+  "version": "1.5.0-dev",
+  "description": "A mongoose plugin for transaction-like semantics between multiple documents.",
+  "main": "dist/index.js",
+  "typings": "dist/index.d.ts",
+  "scripts": {
+    "prepublish": "gulp build",
+    "build": "gulp build",
+    "watch": "gulp build && gulp watch",
+    "clean": "gulp clean",
+    "test": "DEBUG=* ISLAND_LOGGER_LEVEL=crit gulp",
+    "coverage": "gulp coverage"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/wokim/mongoose-transaction-plugin.git"
+  },
+  "keywords": [
+    "mongoose",
+    "transaction",
+    "mongodb"
+  ],
+  "author": "wokim <wonshikkim.kr@gmail.com>",
+  "contributors": [
+    "heycalmdown <hey.calmdown@gmail.com>"
+  ],
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/wokim/mongoose-transaction-plugin/issues"
+  },
+  "homepage": "https://github.com/wokim/mongoose-transaction-plugin#readme",
+  "dependencies": {
+    "bluebird": "^3.4.1",
+    "debug": "^2.2.0",
+    "lodash": "^4.16.1",
+    "mongoose": "^4.5.8",
+    "source-map-support": "^0.4.2",
+    "validator": "^10.4.0"
+  },
+  "devDependencies": {
+    "@types/bluebird": "^3.5.5",
+    "@types/debug": "^0.0.29",
+    "@types/lodash": "^4.14.106",
+    "@types/mongoose": "^4.7.15",
+    "@types/mongodb": "^2.2.3",
+    "@types/node": "^8.0.3",
+    "@types/jasmine": "^2.5.41",
+    "gulp": "^4.0.0",
+    "island-build": "next",
+    "mockgoose": "^6.0.8",
+    "random-words": "0.0.1"
+  }
 }

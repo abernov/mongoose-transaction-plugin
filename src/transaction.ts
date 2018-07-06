@@ -3,6 +3,7 @@ import * as _ from 'lodash';
 import * as Bluebird from 'bluebird';
 import * as _debug from 'debug';
 import * as events from 'events';
+import * as validator from 'validator';
 
 const debug = _debug('transaction');
 const RETRYCOUNT = 5;
@@ -13,8 +14,7 @@ export interface IHistory {
   // collection name
   col: string;
   // document's unique id
-  // TODO : support any types
-  oid: mongoose.Types.ObjectId;
+  oid: string;
   // insert, update, remove
   op: 'insert' | 'remove' | 'update';
   // update query string.
@@ -49,7 +49,7 @@ export class Transaction extends events.EventEmitter {
 
     const historySchema = new mongoose.Schema({
       col: { type: String, required: true },
-      oid: { type: mongoose.Schema.Types.ObjectId, required: true },
+      oid: { type: String, required: true },
       op: { type: String, required: true },
       query: { type: String, required: true }
     });
@@ -139,7 +139,7 @@ export class Transaction extends events.EventEmitter {
   }
 
   private static async commitHistoryRemove(history: IHistory, collection: any): Promise<void> {
-    return await collection.deleteOne({_id:history.oid});
+    return await collection.deleteOne({_id:Transaction.getId(history.oid)});
   }
 
   private static async commitHistoryUpdate(history: IHistory, tid: mongoose.Types.ObjectId, collection: any): Promise<void> {
@@ -158,7 +158,15 @@ export class Transaction extends events.EventEmitter {
     if (query['$set'] != null && Object.keys(query['$set']).length === 0) {
       query = _.omit(query, ['$set']);
     }
-    return await collection.update({_id: history.oid, __t : tid}, query, { w : 1 });
+    return await collection.update({_id: Transaction.getId(history.oid), __t : tid}, query, { w : 1 });
+  }
+
+  private static getId(oid: string) {
+    if (validator.isMongoId(oid)) {
+      return new mongoose.Types.ObjectId(oid);
+    } else {
+      return oid;
+    }
   }
 
   public static async recommit(transaction: ITransaction): Promise<void> {
