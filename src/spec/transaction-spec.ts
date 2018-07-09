@@ -141,8 +141,6 @@ describe('Transaction', () => {
   it('can not save without lock', spec(async () => {
     const doc = await TestPlayer.findOne({ name: 'ekim' }, {}).exec();
     expect(doc['__t']).toBeUndefined();
-    // console.log('doc is ', doc);
-    // console.log('save document to detatch __t');
     try {
       await doc.save();
       expect(true).toEqual(false);
@@ -155,14 +153,11 @@ describe('Transaction', () => {
     await Transaction.scope(async (t) => {
       const doc = await t.findOne(TestPlayer, { name: 'ekim' });
       expect(doc['__t']).toBeDefined();
-      // console.log('first doc is ', doc);
       doc.money += 500;
       const secondTry = await t.findOne(TestPlayer, { name: 'ekim' });
-      // console.log('second doc is ', doc);
       secondTry.money += 1000;
     });
     const doc = await TestPlayer.findOne({ name: 'ekim' }, {}).exec();
-    // console.log(doc.money);
     expect(doc.money).toBe(1500);
   }));
 
@@ -170,10 +165,8 @@ describe('Transaction', () => {
     await Transaction.scope(async (t) => {
       const doc = await t.findOne(TestPlayer, { name: 'ekim' });
       expect(doc['__t']).toBeDefined();
-      // console.log('first doc is ', doc);
       doc.money += 500;
       const sameButDiffConditionDoc = await t.findOne(TestPlayer, { age: 10 });
-      // console.log('second doc is ', doc);
       sameButDiffConditionDoc.money += 1000;
     });
     const doc = await TestPlayer.findOne({ name: 'ekim' }, {}).exec();
@@ -196,7 +189,6 @@ describe('Transaction', () => {
         return t.findOne(TestPlayer, { name: name })
           .then(doc => {
             doc.money += money;
-            // console.log('addMoney!!!!! ', doc.money);
             return doc;
           });
       });
@@ -391,7 +383,7 @@ describe('Transcation (recommit)', () => {
   interface ITestRecommit extends mongoose.Document {
     name: string;
     opts: any;
-  };
+  }
 
   let TestRecommit: mongoose.Model<ITestRecommit>;
 
@@ -462,7 +454,7 @@ describe('Transcation (recommit)', () => {
     await (Transaction as any).makeHistory((transaction as any).participants, t);
     await Transaction.recommit(t);
     expect(await TestRecommit.count({})).toEqual(0);
-  }))
+  }));
 
   it('SHOULD be no __t when the new doc is committed', spec(async () => {
     const transaction = new Transaction();
@@ -481,3 +473,57 @@ describe('Transcation (recommit)', () => {
   }));
 });
 
+describe('Transcation any Type ID', () => {
+  interface ITestDoc extends mongoose.Document {
+    name: string;
+    opts: any;
+    _id: any;
+  }
+
+  let TestAnyIdDoc: mongoose.Model<ITestDoc>;
+
+  beforeAll(spec(async () => {
+    await mockgoose(mongoose);
+    await new Promise(resolve => mongoose.connect('test', resolve));
+
+    const testSchema = new mongoose.Schema({ _id: String, name: String, opts: { status : Number } });
+    testSchema.plugin(plugin);
+    TestAnyIdDoc = conn.model<ITestDoc>('TestAnyId', testSchema);
+
+    Transaction.initialize(conn);
+  }));
+
+  afterEach(spec(async () => {
+    await new Promise((resolve) => mockgoose.reset(() => resolve()));
+  }));
+
+  afterAll(spec(async () => {
+    await new Promise((resolve) => (mongoose as any).unmock(resolve));
+    await new Promise(resolve => mongoose.disconnect(resolve));
+  }));
+
+  beforeEach(spec(async () => {
+    const testDoc1 = new TestAnyIdDoc({ _id: 'jipark', name: 'Park Jiho', opts: { status: 1 } });
+    const testDoc2 = new TestAnyIdDoc({ _id: 'act', name: 'Asia Central Tech', opts: { status : 2 } });
+    await Transaction.scope(async (t) => {
+      await t.insertDoc(testDoc1);
+      await t.insertDoc(testDoc2);
+    });
+  }));
+
+  it('SHOULD check Data', spec(async () => {
+    expect(await TestAnyIdDoc.count({})).toEqual(2);
+    const doc1 = await TestAnyIdDoc.findOne({ _id: 'jipark' }, {}).exec();
+    const doc2 = await TestAnyIdDoc.findOne({ _id: 'act' }, {}).exec();
+    expect(doc1.name).toEqual('Park Jiho');
+    expect(doc2.name).toEqual('Asia Central Tech');
+  }));
+
+  it('should ignore calling begin() twice in silent', spec(async () => {
+    await Transaction.scope(async (t) => {
+      await t.begin();
+      const d = await t.findOne(TestAnyIdDoc, {_id: 'jipark'});
+      expect(d.name).toEqual('Park Jiho');
+    });
+  }));
+});
