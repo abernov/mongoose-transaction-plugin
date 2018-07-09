@@ -12,9 +12,8 @@ const TRANSACTION_KEEP_COMMITTED = (process.env.TRANSACTION_KEEP_COMMITTED === '
 export interface IHistory {
   // collection name
   col: string;
-  // document's unique id
-  // TODO : support any types
-  oid: mongoose.Types.ObjectId;
+  // _id does not necessarily have to be ObjectId;
+  oid: any;
   // insert, update, remove
   op: 'insert' | 'remove' | 'update';
   // update query string.
@@ -32,7 +31,8 @@ interface IParticipant {
   doc: mongoose.Document;
   model?: any;
   cond?: Object;
-};
+  _id?: any;
+}
 
 export class Transaction extends events.EventEmitter {
   public static TRANSACTION_EXPIRE_THRESHOLD = 60 * 1000;
@@ -49,7 +49,7 @@ export class Transaction extends events.EventEmitter {
 
     const historySchema = new mongoose.Schema({
       col: { type: String, required: true },
-      oid: { type: mongoose.Schema.Types.ObjectId, required: true },
+      oid: { type: mongoose.Schema.Types.Mixed, required: true },
       op: { type: String, required: true },
       query: { type: String, required: true }
     });
@@ -139,7 +139,7 @@ export class Transaction extends events.EventEmitter {
   }
 
   private static async commitHistoryRemove(history: IHistory, collection: any): Promise<void> {
-    return await collection.deleteOne({_id:history.oid});
+    return await collection.deleteOne({_id: history.oid});
   }
 
   private static async commitHistoryUpdate(history: IHistory, tid: mongoose.Types.ObjectId, collection: any): Promise<void> {
@@ -204,13 +204,14 @@ export class Transaction extends events.EventEmitter {
       } else if (participant.op === 'insert') {
         query = JSON.stringify(participant.doc);
       }
-      debug(`op : ${participant.op} query : ${JSON.stringify(query)}`);
+      debug(`[makeHistory] op : ${participant.op} history.oid : %o query : ${JSON.stringify(query)}`, participant.doc._id);
       transaction.history.push({
         col: (<any>participant.doc).collection.name,
         oid: participant.doc._id,
         op: participant.op,
         query: query
       });
+      debug(`histroy : %o`, transaction.history[transaction.history.length - 1]);
     });
   }
 
@@ -221,6 +222,7 @@ export class Transaction extends events.EventEmitter {
     debug('history generated: %o', this.transaction.history);
 
     this.transaction.state = 'pending';
+    debug('transaction: %o', this.transaction);
     try {
       this.transaction = await this.transaction.save();
     } catch (err) {
@@ -262,6 +264,7 @@ export class Transaction extends events.EventEmitter {
 
     doc['__t'] = this.transaction._id;
     // 아직 트랜잭션 저장하는 단계는 아니지만 _id 중복 체크를 위해 저장
+    debug('insertDoc : %o', doc);
     await doc.collection.insert(doc);
 
     this.participants.push({ op: 'insert', doc: doc });
@@ -307,7 +310,7 @@ export class Transaction extends events.EventEmitter {
 
       options['retrycount'] -= 1;
       await Bluebird.delay(RetryTimeTable[Math.floor(Math.random() * RetryTimeTable.length)]);
-      return await this.findOne(model, cond, fields, options);
+      return this.findOne(model, cond, fields, options);
     }
     if (!doc) return;
 
