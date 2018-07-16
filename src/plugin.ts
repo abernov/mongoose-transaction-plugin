@@ -146,12 +146,14 @@ class PreFindOne {
 
 function ensureNoUnique(schema) {
   const indexes = schema.indexes();
+  const shardKey = schema.options.shardKey && Object.keys(schema.options.shardKey)[0];
   indexes.forEach(([name, options]) => {
     if (options && options.unique) {
       if (typeof name === 'object') {
         name = Object.keys(name)[0];
       }
-      throw new Error(`Transaction doesn't support an unique index (${name})`);
+      if (name !== shardKey)
+        throw new Error(`Transaction doesn't support an unique index (${name}) shardKey (${shardKey})`);
     }
   });
 }

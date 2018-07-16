@@ -34,19 +34,19 @@ describe('Transaction-static', () => {
   it('should not allow an unique index', spec(async () => {
     expect(() => {
       new mongoose.Schema({ name: String }).index('name', {unique: true}).plugin(plugin);
-    }).toThrowError(`Transaction doesn't support an unique index (name)`);
+    }).toThrowError(`Transaction doesn't support an unique index (name) shardKey (null)`);
 
     expect(() => {
       new mongoose.Schema({ type: { type: Number, index: true, unique: true } }).plugin(plugin);
-    }).toThrowError(`Transaction doesn't support an unique index (type)`);
+    }).toThrowError(`Transaction doesn't support an unique index (type) shardKey (null)`);
 
     expect(() => {
       new mongoose.Schema({ type: { type: Number, index: true } }).plugin(plugin);
-    }).not.toThrowError(`Transaction doesn't support an unique index (type)`);
+    }).not.toThrowError(`Transaction doesn't support an unique index (type) shardKey (null)`);
 
     expect(() => {
       new mongoose.Schema({ name: String }).plugin(plugin).index('name', {unique: true});
-    }).toThrowError(`Transaction doesn't support an unique index (name)`);
+    }).toThrowError(`Transaction doesn't support an unique index (name) shardKey (null)`);
   }));
 });
 
@@ -283,6 +283,8 @@ describe('Transaction', () => {
     oldTransaction.history.push({
       col: TestPlayer.collection.name,
       oid: ekim._id,
+      shardKeyName: 'name',
+      shardKey: ekim.name,
       op: 'update',
       query: JSON.stringify({ $set: { money: 1000 } })
     });
