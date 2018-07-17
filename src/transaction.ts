@@ -14,6 +14,8 @@ export interface IHistory {
   col: string;
   // _id does not necessarily have to be ObjectId;
   oid: any;
+  shardKeyName: string;
+  shardKey: any;
   // insert, update, remove
   op: 'insert' | 'remove' | 'update';
   // update query string.
@@ -50,6 +52,8 @@ export class Transaction extends events.EventEmitter {
     const historySchema = new mongoose.Schema({
       col: { type: String, required: true },
       oid: { type: mongoose.Schema.Types.Mixed, required: true },
+      shardKeyName: { type: String, required: true },
+      shardKey: { type: mongoose.Schema.Types.Mixed, required: true },
       op: { type: String, required: true },
       query: { type: String, required: true }
     });
@@ -129,8 +133,8 @@ export class Transaction extends events.EventEmitter {
     return Promise.resolve(this.connection.db.collection(history.col))
     .then(async collection => {
       if (history.op === 'remove')
-        return await Transaction.commitHistoryRemove(history, collection);
-      return await Transaction.commitHistoryUpdate(history, tid, collection);
+        return Transaction.commitHistoryRemove(history, collection);
+      return Transaction.commitHistoryUpdate(history, tid, collection);
     })
     .catch(err => {
       debug(`transaction ${history.op} failed ${err.message}`);
@@ -139,26 +143,26 @@ export class Transaction extends events.EventEmitter {
   }
 
   private static async commitHistoryRemove(history: IHistory, collection: any): Promise<void> {
-    return await collection.deleteOne({_id: history.oid});
+    return collection.deleteOne({_id: history.oid, [history.shardKeyName]: history.shardKey});
   }
 
   private static async commitHistoryUpdate(history: IHistory, tid: mongoose.Types.ObjectId, collection: any): Promise<void> {
     let query = JSON.parse(history.query);
 
     if (history.op === 'insert') {
-      query = _.omit(query, ['_id', '__t']);
+      query = _.omit(query, ['_id', '__t', history.shardKeyName]);
     } else {
       query['$unset'] = query['$unset'] || {};
       query['$set'] = query['$set'] || {};
 
-      query['$set'] = _.omit(query['$set'], ['_id', '__t']);
+      query['$set'] = _.omit(query['$set'], ['_id', '__t', history.shardKeyName]);
       query['$unset']['__t'] = '';
     }
 
     if (query['$set'] != null && Object.keys(query['$set']).length === 0) {
       query = _.omit(query, ['$set']);
     }
-    return await collection.update({_id: history.oid, __t : tid}, query, { w : 1 });
+    return collection.update({_id: history.oid, [history.shardKeyName]: history.shardKey, __t : tid}, query, { w : 1 });
   }
 
   public static async recommit(transaction: ITransaction): Promise<void> {
@@ -196,18 +200,25 @@ export class Transaction extends events.EventEmitter {
       await Transaction.validate(participant.doc);
 
       debug('delta: %o', (<any>participant.doc).$__delta());
+      const shardKeyName = (<any> participant.doc.schema).options &&
+                         (<any> participant.doc.schema).options.shardKey &&
+                         Object.keys((<any> participant.doc.schema).options.shardKey)[0] ||
+                         '_id';
       let query: string;
       if (participant.op === 'update') {
         query = JSON.stringify(((<any>participant.doc).$__delta() || [null, {}])[1]);
       } else if (participant.op === 'remove') {
-        query = JSON.stringify({ _id: '' });
+        query = JSON.stringify({ _id: '', [shardKeyName]: '' });
       } else if (participant.op === 'insert') {
         query = JSON.stringify(participant.doc);
       }
-      debug(`[makeHistory] op : ${participant.op} history.oid : %o query : ${JSON.stringify(query)}`, participant.doc._id);
+      debug(`[makeHistory] op : ${participant.op} shardKey : ${shardKeyName} history.oid : %o query : ${JSON.stringify(query)}`, participant.doc._id);
+
       transaction.history.push({
         col: (<any>participant.doc).collection.name,
         oid: participant.doc._id,
+        shardKeyName,
+        shardKey: participant.doc[shardKeyName],
         op: participant.op,
         query: query
       });
@@ -235,9 +246,9 @@ export class Transaction extends events.EventEmitter {
       await Bluebird.map(this.participants, async (participant) => {
         debug('commit: [%s] %o', participant.op, participant.doc);
         debug('delta: %o', (participant.doc as any).$__delta());
-        if (participant.op === 'remove') return await participant.doc.remove();
+        if (participant.op === 'remove') return participant.doc.remove();
         if (participant.op === 'insert') participant.doc.isNew = false;
-        return await participant.doc.save();
+        return participant.doc.save();
       });
 
       debug('transaction committed');
