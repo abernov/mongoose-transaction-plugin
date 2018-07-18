@@ -200,10 +200,7 @@ export class Transaction extends events.EventEmitter {
       await Transaction.validate(participant.doc);
 
       debug('delta: %o', (<any>participant.doc).$__delta());
-      const shardKeyName = (<any> participant.doc.schema).options &&
-                         (<any> participant.doc.schema).options.shardKey &&
-                         Object.keys((<any> participant.doc.schema).options.shardKey)[0] ||
-                         '_id';
+      const shardKeyName = Transaction.getShardKey(participant.doc);
       let query: string;
       if (participant.op === 'update') {
         query = JSON.stringify(((<any>participant.doc).$__delta() || [null, {}])[1]);
@@ -270,11 +267,11 @@ export class Transaction extends events.EventEmitter {
 
   // 생성될 document를 transaction에 참가시킴
   public async insertDoc(doc: mongoose.Document) {
-
     if (!this.transaction) throw new Error('Could not find any transaction');
 
     doc['__t'] = this.transaction._id;
-    // 아직 트랜잭션 저장하는 단계는 아니지만 _id 중복 체크를 위해 저장
+    const shardKey = Transaction.getShardKey(doc);
+    if (_.isEmpty(doc[shardKey])) throw new Error(`${shardKey} value is required`);
     debug('insertDoc : %o', doc);
     await doc.collection.insert(doc);
 
@@ -332,5 +329,12 @@ export class Transaction extends events.EventEmitter {
 
     this.participants.push({op: 'update', doc: doc, model: model, cond: cond});
     return doc;
+  }
+
+  private static getShardKey(doc: mongoose.Document): string {
+    return (<any> doc.schema).options &&
+           (<any> doc.schema).options.shardKey &&
+           Object.keys((<any> doc.schema).options.shardKey)[0] ||
+           '_id';
   }
 }
