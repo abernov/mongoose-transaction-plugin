@@ -271,7 +271,7 @@ export class Transaction extends events.EventEmitter {
 
     doc['__t'] = this.transaction._id;
     const shardKey = Transaction.getShardKey(doc);
-    if (_.isEmpty(doc[shardKey])) throw new Error(`${shardKey} value is required`);
+    if (_.isNil(doc[shardKey])) throw new Error(`${shardKey} value is required`);
     debug('insertDoc : %o', doc);
     await doc.collection.insert(doc);
 
