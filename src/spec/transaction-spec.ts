@@ -379,6 +379,23 @@ describe('Transaction (_id uniqueness)', () => {
     const a = await TestUniqId.findOne();
     expect(a.name).toEqual('dad');
   }));
+
+  it('SHOULD start rollback when find _id conflict another transaction', spec(async () => {
+    const oid = new mongoose.Types.ObjectId();
+    await Transaction.scope(async t1 => {
+      await t1.insertDoc(new TestUniqId({ _id: oid }));
+      const transactionModel = new Transaction.getModel();
+      const doc1 = await transactionModel.collection.findOne({_id: t1._id});
+      expect(doc1).not.toBeNull();
+      expect(doc1.rollback.length).toEqual(1);
+      await Transaction.scope(async t2 => {
+        await t2.insertDoc(new TestUniqId({ _id: oid }));
+      });
+      const doc2 = await transactionModel.collection.findOne({_id: t1._id});
+      expect(doc2).toBeNull();
+    });
+    expect(await TestUniqId.count({})).toEqual(1);
+  }));
 });
 
 describe('Transcation (recommit)', () => {
@@ -396,7 +413,6 @@ describe('Transcation (recommit)', () => {
     const testRecommitSchema = new mongoose.Schema({ name: String, opts: mongoose.Schema.Types.Mixed});
     testRecommitSchema.plugin(plugin);
     TestRecommit = conn.model<ITestRecommit>('TestRecommit', testRecommitSchema);
-
     Transaction.initialize(conn);
   }));
 
@@ -420,7 +436,6 @@ describe('Transcation (recommit)', () => {
 
     await (Transaction as any).makeHistory((transaction as any).participants, t);
     await Transaction.recommit(t);
-
     const a = await TestRecommit.findOne();
     expect(a.name).toEqual('baby');
     expect(a.opts.name).toEqual('value');
@@ -472,6 +487,29 @@ describe('Transcation (recommit)', () => {
 
     const doc = await TestRecommit.findOne();
     expect(doc['__t']).toBeUndefined();
+  }));
+
+  it('SHOULD be able to rollback new doc', spec(async () => {
+    const transaction = new Transaction();
+    const t = new Transaction.getModel();
+    (transaction as any).transaction = await t.save();
+    const tui = new TestRecommit();
+    await transaction.insertDoc(tui);
+    tui.name = 'rollbackDoc';
+    tui.opts = {'name' : 'value', 'check' : true, 'numeral' : 3};
+
+    const transactionModel = new Transaction.getModel();
+    const transactionDoc = await transactionModel.collection.findOne({});
+    expect(transactionDoc.history.length).toEqual(0);
+    expect(transactionDoc.rollback.length).toEqual(1);
+    expect(transactionDoc.rollback[0].oid.toString()).toEqual(tui._id.toString());
+
+    const doc1 = await TestRecommit.findOne();
+    expect(doc1).not.toBeNull();
+
+    await Transaction.recommit(t);
+    const doc2 = await TestRecommit.findOne();
+    expect(doc2).toBeNull();
   }));
 });
 
