@@ -22,8 +22,6 @@ export interface IHistory {
   query: string;
 }
 
-// ITemp는 InsertDoc으로 transaction commit 보다 미리 만들어지는 document를 보관한다.
-// cancel 되거나 recommit시 ITemp에 보관중인 Document는 제거될것이다.
 export interface IRollback {
   col: string;
   oid: any;
