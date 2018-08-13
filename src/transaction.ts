@@ -22,8 +22,17 @@ export interface IHistory {
   query: string;
 }
 
+export interface IRollback {
+  col: string;
+  oid: any;
+  shardKeyName: string;
+  shardKey: any;
+}
+
 export interface ITransaction extends mongoose.Document {
   history: IHistory[];
+  rollback: IRollback[];
+  // init -> () -> pending -> committed
   state: string;
   id: string;
 }
@@ -58,8 +67,16 @@ export class Transaction extends events.EventEmitter {
       query: { type: String, required: true }
     });
 
+    const rollbackSchmea = new mongoose.Schema({
+      col: { type: String, required: true },
+      oid: { type: mongoose.Schema.Types.Mixed, required: true },
+      shardKeyName: { type: String, required: true },
+      shardKey: { type: mongoose.Schema.Types.Mixed, required: true }
+    });
+
     const transactionSchema = new mongoose.Schema({
       history: [historySchema],
+      rollback: [rollbackSchmea],
       state: { type: String, required: true, default: 'init', index: true }
     });
     this.connection = connection;
@@ -113,13 +130,12 @@ export class Transaction extends events.EventEmitter {
   public async cancel(): Promise<void> {
     if (!this.transaction) return;
     if (this.transaction.state && this.transaction.state !== 'init') return;
-
     try {
       await Bluebird.each(this.participants, async (participant) => {
         if (participant.op === 'insert')
-          return await participant.doc.remove();
+          return participant.doc.remove();
 
-        return await participant.doc.update({$unset: {__t: ''}}).exec();
+        return participant.doc.update({$unset: {__t: ''}}).exec();
       });
       await this.transaction.remove();
     } catch (e) {
@@ -127,6 +143,18 @@ export class Transaction extends events.EventEmitter {
     }
     this.transaction = undefined;
     this.participants = [];
+  }
+
+  private static async rollback(transaction: ITransaction): Promise<void> {
+    if (!transaction) return;
+    if (transaction.state && transaction.state !== 'init') return;
+    const rollbackHistories = transaction.rollback || [];
+    await Bluebird.each(rollbackHistories, async (history) => {
+      debug('find Rollback history collection: ', history.col, ' oid: ', history.oid);
+      const collection = this.connection.db.collection(history.col);
+      await collection.deleteOne({_id: history.oid, [history.shardKeyName]: history.shardKey});
+    });
+    await (new Transaction.getModel()).collection.deleteOne({_id: transaction._id});
   }
 
   private static async commitHistory(history: IHistory, tid: mongoose.Types.ObjectId): Promise<void> {
@@ -167,7 +195,8 @@ export class Transaction extends events.EventEmitter {
 
   public static async recommit(transaction: ITransaction): Promise<void> {
     const histories = transaction.history;
-    if (!histories) return;
+    if (histories && histories.length === 0)
+      return Transaction.rollback(transaction);
     try {
       await Bluebird.each(histories, async (history) => {
         debug('find history collection: ', history.col, ' oid: ', history.oid);
@@ -266,14 +295,25 @@ export class Transaction extends events.EventEmitter {
   }
 
   // 생성될 document를 transaction에 참가시킴
-  public async insertDoc(doc: mongoose.Document) {
+  public async insertDoc(doc: mongoose.Document, retry: boolean = false) {
     if (!this.transaction) throw new Error('Could not find any transaction');
 
     doc['__t'] = this.transaction._id;
     const shardKey = Transaction.getShardKey(doc);
     if (_.isNil(doc[shardKey])) throw new Error(`${shardKey} value is required`);
     debug('insertDoc : %o', doc);
-    await doc.collection.insert(doc);
+    await this.setRollbackHistory(doc);
+    try {
+      await doc.collection.insert(doc);
+    } catch (e) {
+      if (retry || e.code !== 11000) throw e; // E11000 duplicate key error
+      const existsDoc = await doc.collection.findOne({_id: doc._id, [shardKey]: doc[shardKey]});
+      if (!existsDoc || existsDoc.__t.toString() === this.transaction._id.toString()) throw e;
+      const oldTransaction = await this.transaction.collection.findOne({_id: existsDoc.__t});
+      if (!oldTransaction) throw e;
+      await Transaction.recommit(oldTransaction);
+      return this.insertDoc(doc, true);
+    }
 
     this.participants.push({ op: 'insert', doc: doc });
   }
@@ -329,6 +369,20 @@ export class Transaction extends events.EventEmitter {
 
     this.participants.push({op: 'update', doc: doc, model: model, cond: cond});
     return doc;
+  }
+
+  private async setRollbackHistory(doc: mongoose.Document) {
+    const shardKey = Transaction.getShardKey(doc);
+    const rollbackHistory: IRollback = {
+      col: doc.collection.name,
+      oid: doc._id,
+      shardKey: doc[shardKey],
+      shardKeyName: shardKey
+    };
+    await this.transaction.collection.updateOne({ _id: this.transaction._id },
+                                                { $push : { rollback : rollbackHistory } }
+                                               );
+    this.transaction.rollback.push(rollbackHistory);
   }
 
   private static getShardKey(doc: mongoose.Document): string {
