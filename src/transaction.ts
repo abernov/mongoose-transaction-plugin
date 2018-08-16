@@ -67,7 +67,7 @@ export class Transaction extends events.EventEmitter {
       query: { type: String, required: true }
     });
 
-    const rollbackSchmea = new mongoose.Schema({
+    const rollbackSchema = new mongoose.Schema({
       col: { type: String, required: true },
       oid: { type: mongoose.Schema.Types.Mixed, required: true },
       shardKeyName: { type: String, required: true },
@@ -76,7 +76,7 @@ export class Transaction extends events.EventEmitter {
 
     const transactionSchema = new mongoose.Schema({
       history: [historySchema],
-      rollback: [rollbackSchmea],
+      rollback: [rollbackSchema],
       state: { type: String, required: true, default: 'init', index: true }
     });
     this.connection = connection;
